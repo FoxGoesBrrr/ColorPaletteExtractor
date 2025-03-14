@@ -1,42 +1,63 @@
 from color import Color
+from collections import defaultdict, deque
 
 class DBScan:
     def __init__(self, colors: list[Color], epsilon: float, minPts: int):
-        self.colors: list[Color] = colors
-        self.epsilon: float = epsilon
-        self.minPts: int = minPts
-        self.clusters: list[list[Color]] = []
-        self.outliers: list[Color] = []
+        self.colors = colors
+        self.epsilon = epsilon
+        self.minPts = minPts
+        self.clusters = []
+        self.outliers = []
+        self.neighbors_map = defaultdict(list)
+        
     def run(self):
-        for c in self.colors:
-            if self.__countNeighbors(c) >= self.minPts:
+        self._precompute_neighbors()
+        
+        for i, c in enumerate(self.colors):
+            if len(self.neighbors_map[i]) >= self.minPts:
                 c.setCore()
-        for c in self.colors:
+        
+        for i, c in enumerate(self.colors):
             if not c.isClustered() and c.isCore():
-                cluster = self.__formClusters(c)
+                cluster = self._form_cluster(i)
                 self.clusters.append(cluster)
-    def __countNeighbors(self, p: Color) -> int:
-        count: int = 0
-        for c in self.colors:
-            if p.getColor == c.getColor:
+    
+    def _precompute_neighbors(self):
+        n = len(self.colors)
+        for i in range(n):
+            for j in range(i + 1, n):  
+                if self.colors[i].getDistance(self.colors[j]) <= self.epsilon:
+                    self.neighbors_map[i].append(j)
+                    self.neighbors_map[j].append(i)
+    
+    def _form_cluster(self, point_idx: int) -> list[Color]:
+        cluster = []
+        queue = deque([point_idx])
+        processed = set()
+        
+        while queue:
+            idx = queue.popleft()  
+            if idx in processed:
                 continue
-            if p.getDistance(c) <= self.epsilon:
-                count += 1
-        return count
-    def __formClusters(self, p: Color) -> list[Color]:
-        cluster: list[Color] = []
-        for c in self.colors:
-            if c.isClustered():
-                continue
-            if p.getDistance(c) <= self.epsilon:
-                c.setClustered()
-                cluster.append(c)
+                
+            processed.add(idx)
+            point = self.colors[idx]
+            
+            if not point.isClustered():
+                point.setClustered()
+                cluster.append(point)
+                
+                if point.isCore():
+                    for neighbor_idx in self.neighbors_map[idx]:
+                        if neighbor_idx not in processed:
+                            queue.append(neighbor_idx)
+                            
         return cluster
+    
     def getClusters(self) -> list[list[Color]]:
         return self.clusters
+    
     def getOutliers(self) -> list[Color]:
         if not self.outliers:
-            for c in self.colors:
-                if not c.isClustered():
-                    self.outliers.append(c)
+            self.outliers = [c for c in self.colors if not c.isClustered()]
         return self.outliers
